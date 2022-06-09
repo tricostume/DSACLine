@@ -125,8 +125,8 @@ class DSAC:
 
 		batch_size = prediction.size(0)
 
-		avg_exp_loss = 0 # expected loss
-		avg_top_loss = 0 # loss of best hypothesis
+		avg_exp_loss = torch.zeros(1, requires_grad=True)
+		avg_top_loss = 0
 
 		self.est_parameters = torch.zeros(batch_size, 2) # estimated lines
 		self.est_losses = torch.zeros(batch_size) # loss of estimated lines
@@ -134,8 +134,8 @@ class DSAC:
 
 		for b in range(0, batch_size):
 
-			hyp_losses = torch.zeros([self.hyps, 1]) # loss of each hypothesis
-			hyp_scores = torch.zeros([self.hyps, 1]) # score of each hypothesis
+			hyp_losses = torch.zeros(self.hyps) # loss of each hypothesis
+			hyp_scores = torch.zeros(self.hyps) # score of each hypothesis
 
 			max_score = 0 	# score of best hypothesis
 
@@ -146,7 +146,8 @@ class DSAC:
 
 				# === step 1: sample hypothesis ===========================
 				slope, intercept, valid = self.__sample_hyp(x, y)
-				if not valid: continue # skip invalid hyps
+				if not valid:
+					continue # skip invalid hyps
 
 				# === step 2: score hypothesis using soft inlier count ====
 				score, inliers = self.__soft_inlier_count(slope, intercept, x, y)
@@ -154,12 +155,12 @@ class DSAC:
 				# === step 3: refine hypothesis ===========================
 				slope, intercept = self.__refine_hyp(x, y, inliers)
 
-				hyp = torch.zeros([2])
+				hyp = torch.zeros(2)
 				hyp[1] = slope
 				hyp[0] = intercept
 
 				# === step 4: calculate loss of hypothesis ================
-				loss = self.loss_function(hyp, labels[b]) 
+				loss = self.loss_function(hyp, labels[b])
 
 				# store results
 				hyp_losses[h] = loss
@@ -172,16 +173,17 @@ class DSAC:
 					self.est_parameters[b] = hyp
 					self.batch_inliers[b] = inliers
 
-			# === step 5: calculate the expectation ===========================
 
-			#softmax distribution from hypotheses scores			
+			# === step 5: calculate the expectation ===========================
+			#softmax distribution from hypotheses scores
 			hyp_scores = F.softmax(self.inlier_alpha * hyp_scores, 0)
 
 			# expectation of loss
 			exp_loss = torch.sum(hyp_losses * hyp_scores)
 			avg_exp_loss = avg_exp_loss + exp_loss
 
+
 			# loss of best hypothesis (for evaluation)
 			avg_top_loss = avg_top_loss + self.est_losses[b]
-	
+		
 		return avg_exp_loss / batch_size, avg_top_loss / batch_size
